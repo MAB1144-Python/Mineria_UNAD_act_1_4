@@ -1,0 +1,284 @@
+>
+
+
+Dataset sintético de ventas que puedes crear directamente en R. Aquí está el código para generarlo:
+
+
+
+
+# Crear datos sintéticos de ventas
+> set.seed(123) # Para reproducibilidad
+> 
+> # Crear fechas para todo un año
+> fechas <- seq(as.Date("2023-01-01"), as.Date("2023-12-31"), by = "day")
+> 
+> # Crear el dataframe
+> ventas <- data.frame(
++     fecha = fechas,
++     monto = round(rnorm(length(fechas), mean = 1000, sd = 200) * 
++                       (1 + sin(2*pi*(1:length(fechas))/365)*0.3), 2), # Añade estacionalidad
++     producto = sample(c("Laptop", "Smartphone", "Tablet", "Smartwatch"), length(fechas), replace = TRUE),
++     region = sample(c("Norte", "Sur", "Este", "Oeste"), length(fechas), replace = TRUE),
++     tipo_pago = sample(c("Crédito", "Débito", "Efectivo"), length(fechas), replace = TRUE),
++     cantidad = sample(1:10, length(fechas), replace = TRUE)
++ )
+> 
+> # Añadir mes y día de la semana para facilitar el análisis
+> ventas$mes <- format(ventas$fecha, "%m")
+> ventas$dia_semana <- format(ventas$fecha, "%A")
+> 
+> # Guardar el dataset como CSV
+> write.csv(ventas, "ventas_2023.csv", row.names = FALSE)
+> View(ventas)
+
+
+
+Este dataset incluye:
+
+fecha: Fecha de la venta
+monto: Valor de la venta (con patrón estacional incluido)
+producto: Tipo de producto vendido
+region: Región donde se realizó la venta
+tipo_pago: Método de pago
+cantidad: Cantidad de unidades vendidas
+mes: Mes de la venta
+dia_semana: Día de la semana
+
+Los datos tienen patrones interesantes incorporados:
+
+Estacionalidad en las ventas
+Variación aleatoria
+Diferentes categorías de productos y regiones
+Diversos métodos de pago
+
+
+Puedes guardar este archivo como "ventas_2023.csv" y luego usar el código anterior que te proporcioné, modificando la ruta del archivo, esto cargara la base de datos a Spark
+
+ventas_tbl <- spark_read_csv(sc, 
+                            name = "ventas",
+                            path = "ventas_2023.csv")
+
+
+Este dataset es ideal para el ejercicio porque:
+
+Contiene suficientes variables para hacer un análisis interesante
+Incluye patrones que pueden ser descubiertos
+Tiene tanto variables numéricas como categóricas
+Es lo suficientemente grande para justificar el uso de Spark
+
+
+# 3. Exploración inicial de datos
+# Estructura básica
+glimpse(ventas_tbl)
+
+# Resumen estadístico
+
+install.packages("dplyr")
+library(dplyr)
+
+ventas_tbl %>%
+  summarise(
+    total_ventas = sum(monto),
+    promedio_venta = mean(monto),
+    max_venta = max(monto),
+    min_venta = min(monto)
+  ) %>%
+  collect()
+
+
+
+  # Versión corregida para calcular correlaciones
+correlaciones <- ventas_tbl %>%
+  select(monto, cantidad) %>%  # Seleccionamos explícitamente las columnas numéricas
+  collect() %>%  # Primero colectamos los datos
+  cor()  # Luego calculamos las correlaciones
+
+  CORECCION
+
+  correlaciones <- ventas %>%
+  select(monto, cantidad) %>%  # Seleccionamos explícitamente las columnas numéricas
+  cor()  # Calculamos las correlaciones
+
+# Para visualizar las correlaciones de forma más clara
+print(correlaciones)
+
+Este resultado muestra una matriz de correlación entre las variables "monto" y "cantidad" de tu dataset de ventas. Aquí está su interpretación:
+
+Los valores en la diagonal (1.0) representan la correlación de cada variable consigo misma, que siempre es 1.
+El valor -0.01806888 representa la correlación entre "monto" y "cantidad". Esta correlación:
+
+Es negativa, lo que indica una relación inversa muy débil
+Es muy cercana a cero, lo que sugiere prácticamente ninguna relación lineal
+
+
+
+En términos prácticos, este resultado indica que no existe una relación significativa entre el monto de las ventas y la cantidad de productos vendidos en cada transacción. Cuando la cantidad aumenta, no hay un patrón claro que indique si el monto aumentará o disminuirá, y viceversa.
+Esta ausencia de correlación podría deberse a:
+
+Diferentes precios entre productos (algunas unidades individuales pueden costar mucho más que múltiples unidades de otros productos)
+La naturaleza aleatoria de los datos sintéticos que generaste
+
+En datos reales de ventas, generalmente esperaríamos una correlación positiva entre estas variables.
+
+
+# Si quieres una visualización más atractiva de las correlaciones, puedes usar:
+library(corrplot)
+corrplot(correlaciones, method = "color", type = "upper", 
+         addCoef.col = "black", # Añade coeficientes de correlación
+         tl.col = "black")  # Color del texto
+
+
+# Gráfico de tendencia mensual, se evidencia comportamiento estacional.
+ggplot(patrones_mensuales, aes(x = mes, y = total_ventas)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Tendencia de Ventas Mensuales",
+       x = "Mes",
+       y = "Total de Ventas")
+
+
+# 7. Cerrar conexión
+spark_disconnect(sc)
+
+
+
+
+
+Gráfico de tendencia de ventas por mes con línea suavizada:
+
+
+ggplot(patrones_mensuales, aes(x = as.numeric(mes), y = total_ventas)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  labs(title = "Tendencia de Ventas Mensuales con Línea Suavizada",
+       x = "Mes",
+       y = "Total de Ventas") +
+  theme_minimal()
+
+CORRECCION 
+
+# Primero crear el dataframe de patrones mensuales
+library(dplyr)
+library(ggplot2)
+
+# Agregar los datos por mes
+patrones_mensuales <- ventas %>%
+  group_by(mes) %>%
+  summarise(total_ventas = sum(monto))
+
+# Ordenar los meses cronológicamente (opcional)
+patrones_mensuales$mes <- factor(patrones_mensuales$mes, levels = sprintf("%02d", 1:12))
+
+# Crear el gráfico
+ggplot(patrones_mensuales, aes(x = mes, y = total_ventas)) +
+  geom_line(group = 1) + # El group=1 es necesario para conectar todos los puntos
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Tendencia de Ventas Mensuales",
+       x = "Mes",
+       y = "Total de Ventas")
+
+
+
+El gráfico muestra la tendencia de ventas mensuales a lo largo de un año. Se observa un patrón estacional claro:
+
+Las ventas comienzan en aproximadamente 33,000 en enero (mes 01)
+Aumentan hasta alcanzar su punto máximo en marzo (mes 03) con alrededor de 40,000
+A partir de ahí, experimentan una disminución constante durante los meses de primavera y verano
+Llegan a su punto más bajo en septiembre (mes 09) con aproximadamente 22,000
+Finalmente, muestran una recuperación gradual en los últimos meses del año, terminando en diciembre (mes 12) con cerca de 28,000
+Este patrón muestra una clara estacionalidad en las ventas, con un pico a principios de año, seguido por una tendencia descendente durante la mayor parte del año y una recuperación hacia el final. Estas fluctuaciones podrían reflejar patrones de compra estacionales, lo que sería útil para planificar inventario, promociones y recursos a lo largo del año.
+
+
+
+
+
+
+  Gráfico de barras de ventas por mes:
+
+
+ggplot(patrones_mensuales, aes(x = as.numeric(mes), y = total_ventas)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Ventas Totales por Mes",
+       x = "Mes",
+       y = "Total de Ventas") +
+  theme_minimal()
+
+El gráfico de barras muestra las "Ventas Totales por Mes" a lo largo del año. Se puede observar:
+
+El mes con mayores ventas es marzo (aproximadamente mes 3), con ventas cercanas a 40,000
+Hay una tendencia decreciente desde marzo hasta septiembre (mes 9), donde las ventas alcanzan su punto más bajo alrededor de 22,000
+A partir de septiembre, las ventas comienzan a recuperarse gradualmente
+Los primeros cinco meses del año (enero a mayo) muestran ventas consistentemente altas
+El segundo semestre muestra ventas considerablemente más bajas, especialmente en los meses 9 y 10 (septiembre y octubre)
+Diciembre (mes 12) muestra una recuperación, pero sigue siendo inferior a los niveles de principios de año
+
+Esta visualización de barras confirma el mismo patrón estacional que se observaba en el gráfico de líneas anterior, pero permite comparar más claramente las magnitudes entre los diferentes meses. La estacionalidad es prominente, con una clara preferencia de ventas en la primera mitad del año.
+
+
+  Gráfico combinado de líneas y puntos con etiquetas:
+
+  ggplot(patrones_mensuales, aes(x = as.numeric(mes), y = total_ventas)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red", size = 3) +
+  geom_text(aes(label = round(total_ventas,0)), vjust = -0.5) +
+  labs(title = "Tendencia de Ventas Mensuales con Valores",
+       x = "Mes",
+       y = "Total de Ventas") +
+  theme_minimal()
+
+
+El gráfico muestra la "Tendencia de Ventas Mensuales con Valores" a lo largo del año, con cada punto mostrando el valor exacto de ventas para cada mes. Los datos revelan:
+
+Enero comienza con 33,238 en ventas
+Se observa un crecimiento inicial hasta alcanzar el pico máximo en marzo con 40,087
+A partir de marzo, hay una disminución constante mes a mes:
+
+Abril: 37,927
+Mayo: 36,466
+Junio: 33,039
+Julio: 29,071
+Agosto: 24,068
+
+
+El punto más bajo ocurre en septiembre con 21,933
+Los últimos meses muestran una recuperación gradual:
+
+Octubre: 22,709
+Noviembre: 24,709
+Diciembre: 28,449
+
+
+
+Esta visualización proporciona mayor precisión al incluir los valores numéricos exactos, permitiendo un análisis más detallado. La diferencia entre el mes de mayor venta (marzo) y el de menor venta (septiembre) es de 18,154, lo que representa una variación de aproximadamente 45% entre estos puntos extremos.
+El patrón muestra claramente una estacionalidad significativa que podría estar relacionada con ciclos de compra específicos de la industria o con factores estacionales que afectan el comportamiento del consumidor.
+
+
+
+  Gráfico de tendencia con bandas de confianza:
+
+
+  ggplot(patrones_mensuales, aes(x = as.numeric(mes), y = total_ventas)) +
+  geom_line() +
+  geom_smooth(method = "loess") +
+  labs(title = "Tendencia de Ventas Mensuales con Intervalo de Confianza",
+       x = "Mes",
+       y = "Total de Ventas") +
+  theme_minimal()
+
+  El gráfico titulado "Tendencia de Ventas Mensuales con Intervalo de Confianza" muestra la evolución de las ventas a lo largo del año con elementos adicionales que aportan mayor contexto estadístico:
+
+La línea negra representa los datos reales de ventas mensuales
+La línea azul suavizada muestra la tendencia general, eliminando fluctuaciones menores
+El área gris sombreada alrededor de la línea azul representa el intervalo de confianza, indicando el rango de variabilidad estimada
+
+Este gráfico confirma el patrón estacional identificado anteriormente, pero añade información sobre la confiabilidad de la tendencia:
+
+Se observa una clara curva estacional que alcanza su máximo alrededor del mes 3 (marzo)
+Hay un descenso progresivo hasta aproximadamente el mes 9 (septiembre)
+Se aprecia una recuperación en los últimos meses del año
+
+El intervalo de confianza es relativamente estrecho a lo largo de la mayor parte del año, lo que sugiere que la tendencia identificada es estadísticamente sólida. Sin embargo, el intervalo se ensancha ligeramente en los extremos (principio y fin de año), indicando mayor incertidumbre en esos periodos.
+Esta visualización es particularmente útil para la planificación, ya que no solo muestra la tendencia central sino también el rango probable de variación, permitiendo tomar decisiones comerciales más informadas.
